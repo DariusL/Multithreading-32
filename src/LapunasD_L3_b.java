@@ -85,14 +85,10 @@ public class LapunasD_L3_b {
 
 		@Override
 		public void run() {
-			try{
-				for(Struct c : data){
-					writeChannel.write(new Counter(c.pav, c.kiekis, -1));
-				}
-				writeChannel.write(new Counter("", -1, 0));
-			}catch(PoisonException e){
-				//sprogom
+			for(Struct c : data){
+				writeChannel.write(new Counter(c.pav, c.kiekis, -1));
 			}
+			writeChannel.write(new Counter("", -1, 0));
 		}
 	}
 	
@@ -121,14 +117,20 @@ public class LapunasD_L3_b {
 					counter = requirements.get(i);
 					requests.write(counter);
 					int taken =  results.read();
-					counter.count -= taken;
-
-					if(counter.count <= 0){
+					if(taken >= 0){
+						counter.count -= taken;
+	
+						if(counter.count <= 0){
+							requirements.remove(i);
+						}
+					}else{
+						deficit.add(counter);
 						requirements.remove(i);
 					}
 				}
 				requests.write(new Counter("", -1, 0));
 			}catch(PoisonException e){
+			}finally{
 				deficit.addAll(requirements);
 			}
 			for(Counter def : deficit){
@@ -139,12 +141,10 @@ public class LapunasD_L3_b {
 	
 	static class Buffer implements CSProcess{
 		private ArrayList<Counter> data = new ArrayList<>();
-		
 		private ArrayList<ChannelOutputInt> consumerResults;
-		
 		private ChannelInput consumerRequests;
-		
 		private ChannelInput production;
+		private Alternative selector;
 		
 		private int consumers;
 		private int producers;
@@ -156,6 +156,8 @@ public class LapunasD_L3_b {
 			this.consumerRequests = consumerRequests;
 			this.consumerResults = consumerResults;
 			this.production = production;
+			Guard tmp[] = {(Guard) production, (Guard) consumerRequests};
+			selector = new Alternative(tmp);
 		}
 		
 		private void add(Counter counter){
@@ -188,33 +190,26 @@ public class LapunasD_L3_b {
 		@Override
 		public void run() {
 			while(consumers + producers > 0){
-				if(data.size() > 0){
-					if(consumers > 0){
-						Counter req = (Counter) consumerRequests.read();
-						if(req.count > 0){
-							int taken = take(req);
-							int c = req.consumer;
-							if(taken == 0 && producers <= 0)
-								consumerResults.get(c).poison(500);
-							else
-								consumerResults.get(c).write(taken);
-						}else{
-							consumers--;
-						}
-					
-					}
-				}
-				
-				if(producers > 0){
+				int which = selector.fairSelect(new boolean[]{producers > 0, consumers > 0});
+				if(which == 0){
 					Counter in = (Counter) production.read();
 					if(in.count > 0)
 						add(in);
 					else
 						producers--;
-					
-				}else if(data.size() == 0){
-					consumerRequests.poison(500);
-					consumers = 0;
+				}else{
+					Counter req = (Counter) consumerRequests.read();
+					if(req.count > 0){
+						int taken = take(req);
+						int c = req.consumer;
+						if(taken == 0 && producers <= 0){
+							consumerResults.get(c).write(-1);
+						}
+						else
+							consumerResults.get(c).write(taken);
+					}else{
+						consumers--;
+					}
 				}
 			}
 		}
@@ -323,8 +318,8 @@ public class LapunasD_L3_b {
 		System.out.print("\nVartotojams truko:\n");
 		
 		ArrayList<CSProcess> threads = new ArrayList<>();
-		Any2OneChannel production = Channel.any2one(0);
-		Any2OneChannel requests = Channel.any2one(0);
+		Any2OneChannel production = Channel.any2one();
+		Any2OneChannel requests = Channel.any2one();
 		ArrayList<ChannelOutputInt> consumerResults = new ArrayList<>();
 		
 		for(ArrayList<Counter> consumer : cdata){
