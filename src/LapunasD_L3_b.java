@@ -20,6 +20,9 @@ import org.jcsp.lang.One2OneChannelInt;
 import org.jcsp.lang.Parallel;
 import org.jcsp.lang.PoisonException;
 
+//didzioji dalis kodo nekito
+//nebenaudojam poison, count = -1 reiskia blogus dalykus
+
 public class LapunasD_L3_b {
     public static final String DELIMS = "[ ]+";
 	
@@ -91,7 +94,7 @@ public class LapunasD_L3_b {
 			writeChannel.write(new Counter("", -1, 0));
 		}
 	}
-	
+
 	static class Consumer implements CSProcess{
 		private ArrayList<Counter> requirements;
 		private ArrayList<Counter> deficit;
@@ -124,6 +127,7 @@ public class LapunasD_L3_b {
 							requirements.remove(i);
 						}
 					}else{
+						//jei gavom -1, sio gaminio nebebus buferyje
 						deficit.add(counter);
 						requirements.remove(i);
 					}
@@ -134,7 +138,7 @@ public class LapunasD_L3_b {
 				deficit.addAll(requirements);
 			}
 			for(Counter def : deficit){
-				System.out.println(def.pav + ' ' + def.count); 
+				System.out.println(def); 
 			}
 		}
 	}
@@ -142,8 +146,8 @@ public class LapunasD_L3_b {
 	static class Buffer implements CSProcess{
 		private ArrayList<Counter> data = new ArrayList<>();
 		private ArrayList<ChannelOutputInt> consumerResults;
-		private ChannelInput consumerRequests;
-		private ChannelInput production;
+		private ChannelInput consumerRequests;//ivestis vartotoju uzklausoms
+		private ChannelInput production;//ivestis gamybai
 		private Alternative selector;
 		
 		private int consumers;
@@ -189,26 +193,26 @@ public class LapunasD_L3_b {
 
 		@Override
 		public void run() {
-			while(consumers + producers > 0){
-				int which = selector.fairSelect(new boolean[]{producers > 0, consumers > 0});
+			while(consumers + producers > 0){//vykdom kol yra gamintoju arba vartotoju
+				int which = selector.fairSelect(new boolean[]{producers > 0, consumers > 0});//pasirenkam viena is ju
 				if(which == 0){
 					Counter in = (Counter) production.read();
 					if(in.count > 0)
 						add(in);
 					else
-						producers--;
+						producers--;//jei gavom -1, sis gamintojas baige darba
 				}else{
 					Counter req = (Counter) consumerRequests.read();
 					if(req.count > 0){
 						int taken = take(req);
 						int c = req.consumer;
 						if(taken == 0 && producers <= 0){
-							consumerResults.get(c).write(-1);
+							consumerResults.get(c).write(-1);//jei gamyba baigesi ir nieko neradom, sio gaminio nebebus
 						}
 						else
 							consumerResults.get(c).write(taken);
 					}else{
-						consumers--;
+						consumers--;//jei gavom -1, sis vartotojas baige darba
 					}
 				}
 			}
@@ -318,6 +322,7 @@ public class LapunasD_L3_b {
 		System.out.print("\nVartotojams truko:\n");
 		
 		ArrayList<CSProcess> threads = new ArrayList<>();
+		//valdytojo ivestim liko 2 kanalai vietoje daug
 		Any2OneChannel production = Channel.any2one();
 		Any2OneChannel requests = Channel.any2one();
 		ArrayList<ChannelOutputInt> consumerResults = new ArrayList<>();

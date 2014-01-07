@@ -45,13 +45,13 @@ Trys 20
 Penki 11
 Vienas 39
 
-Du 13
+Du 16
 Dviratis 50
 Trys 40
 Keturi 45
 
 Du 30
-Keturi 20
+Keturi 10
 Penki 50
 Trys 30
 Vienas 20
